@@ -1,32 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta charset="utf-8" />
   <title>Our simple HTTP server</title>
   <link rel="stylesheet" type="text/css" href="/style.css">
-  
-  <script>
-
-  </script>
 </head>
 <body>
   <section id="top">
     <h3>Status Code Tests</h3>
+
     <select id="page">
-      <option value="/success">Success</option>
-      <option value="/badRequest">Bad Request</option>
-      <option value="/unauthorized">Unauthorized</option>
-      <option value="/forbidden">Forbidden</option>
-      <option value="/internal">Internal</option>
-      <option value="/notImplemented">Not Implemented</option>
-      <option value="/notFound">Not Found</option>
+      <option value="/success">/success</option>
+      <option value="/badRequest">/badRequest</option>
+      <option value="/unauthorized">/unauthorized</option>
+      <option value="/forbidden">/forbidden</option>
+      <option value="/internal">/internal</option>
+      <option value="/notImplemented">/notImplemented</option>
+      <option value="/notFound">/notFound</option>
     </select>
+
     <select id="type">
-      <option value="application/json">JSON</option>
-      <option value="text/xml">XML</option>
+      <option value="application/json">JSON (application/json)</option>
+      <option value="text/xml">XML (text/xml)</option>
     </select>
+
+    <!-- Optional quick toggles for testing query params -->
+    <label style="margin-left:8px;">
+      <input type="checkbox" id="addValid" /> add ?valid=true
+    </label>
+    <label style="margin-left:8px;">
+      <input type="checkbox" id="addLoggedIn" /> add ?loggedIn=yes
+    </label>
+
     <button id="send">Send</button>
   </section>
+
   <section id="content">
   </section>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const sendBtn = document.getElementById('send');
+      const pageSel = document.getElementById('page');
+      const typeSel = document.getElementById('type');
+      const content = document.getElementById('content');
+      const addValid = document.getElementById('addValid');
+      const addLogged = document.getElementById('addLoggedIn');
+
+      const buildUrlWithParams = (base) => {
+        const params = [];
+        if (addValid.checked) params.push('valid=true');
+        if (addLogged.checked) params.push('loggedIn=yes');
+        if (params.length > 0) return `${base}?${params.join('&')}`;
+        return base;
+      };
+
+      sendBtn.addEventListener('click', () => {
+        const path = pageSel.value;
+        const accept = typeSel.value || 'application/json';
+        const url = buildUrlWithParams(path);
+
+        fetch(url, { headers: { Accept: accept } })
+          .then((res) => res.text().then((text) => ({ res, text })))
+          .then(({ res, text }) => {
+            // Print raw JSON/XML text BEFORE parsing
+            console.log('Raw response text:', text);
+
+            const contentType = (res.headers.get('content-type') || '').toLowerCase();
+
+            let html = `<p><strong>Status:</strong> ${res.status} ${res.statusText}</p>`;
+
+            if (contentType.includes('application/json')) {
+              try {
+                const obj = JSON.parse(text);
+                html += `<p>${obj.message}</p>`;
+                if (obj.id) html += `<p><strong>ID:</strong> ${obj.id}</p>`;
+              } catch (e) {
+                console.error('JSON parse error', e);
+                html += '<p>Error parsing JSON</p>';
+              }
+            } else if (contentType.includes('text/xml') || contentType.includes('application/xml')) {
+              try {
+                const parser = new DOMParser();
+                const xml = parser.parseFromString(text, 'text/xml');
+                const messageNode = xml.getElementsByTagName('message')[0];
+                const idNode = xml.getElementsByTagName('id')[0];
+                const message = messageNode ? messageNode.textContent : 'No message';
+                html += `<p>${message}</p>`;
+                if (idNode) html += `<p><strong>ID:</strong> ${idNode.textContent}</p>`;
+              } catch (e) {
+                console.error('XML parse error', e);
+                html += '<p>Error parsing XML</p>';
+              }
+            } else {
+              // Fallback: attempt JSON parse, otherwise show raw
+              try {
+                const obj = JSON.parse(text);
+                html += `<p>${obj.message}</p>`;
+                if (obj.id) html += `<p><strong>ID:</strong> ${obj.id}</p>`;
+              } catch (e) {
+                html += `<pre>${text}</pre>`;
+              }
+            }
+
+            content.innerHTML = html;
+          })
+          .catch((err) => {
+            console.error(err);
+            content.innerHTML = '<p>An error occurred fetching the resource.</p>';
+          });
+      });
+    });
+  </script>
 </body>
 </html>
